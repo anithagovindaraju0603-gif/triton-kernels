@@ -34,10 +34,15 @@ for (M, N) in shapes:
     t_triton = benchmark(softmax, x)
     t_pytorch = benchmark(lambda x: torch.softmax(x, dim=-1), x)
     
-    bytes_moved = 2 * M * N * 4
-    bw_naive = (bytes_moved / (t_naive / 1000)) / 1e9
-    bw_triton = (bytes_moved / (t_triton / 1000)) / 1e9
-    bw_pytorch = (bytes_moved / (t_pytorch / 1000)) / 1e9
+    # bandwidth calculation
+    # For fused kernels (Triton, torch.softmax): 1 read + 1 write = 2 * M * N * 4 bytes
+    # For naive softmax: 5 reads + 3 writes = 8 * M * N * 4 bytes (per Triton tutorial)
+    bytes_fused = 2 * M * N * 4
+    bytes_naive = 8 * M * N * 4
+
+    bw_naive = (bytes_naive / (t_naive / 1000)) / 1e9
+    bw_triton = (bytes_fused / (t_triton / 1000)) / 1e9
+    bw_pytorch = (bytes_fused / (t_pytorch / 1000)) / 1e9
     
     naive_rows.append({
         "Shape": f"({M}, {N})",

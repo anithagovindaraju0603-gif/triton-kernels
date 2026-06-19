@@ -2,11 +2,11 @@ import torch
 import triton
 from kernel import softmax
 from naive_softmax import naive_softmax
-import matplotlib.pyplot as plt
+import pandas as pd
 
 def benchmark(func, x, n_runs=1000): 
     # warmup
-    for _ in range(50):  # warm up
+    for _ in range(50):
         func(x)
     
     start = torch.cuda.Event(enable_timing=True)
@@ -23,9 +23,9 @@ def benchmark(func, x, n_runs=1000):
 
 shapes = [(1823, 781), (4096, 1024), (4096, 4096), (16384, 8192)]
 
-naive_times = []
-triton_times = []
-pytorch_times = []
+naive_rows = []
+triton_rows = []
+pytorch_rows = []
 
 for (M, N) in shapes:
     x = torch.randn(M, N, device="cuda")
@@ -34,14 +34,28 @@ for (M, N) in shapes:
     t_triton = benchmark(softmax, x)
     t_pytorch = benchmark(lambda x: torch.softmax(x, dim=-1), x)
     
-    naive_times.append(t_naive)
-    triton_times.append(t_triton)
-    pytorch_times.append(t_pytorch)
-    
-    # bandwidth calculation
-    # bytes read + bytes written = 2 * M * N * 4 (float32 = 4 bytes)
     bytes_moved = 2 * M * N * 4
-    bandwidth_gb = (bytes_moved / (t_triton / 1000)) / 1e9  # GB/s
+    bw_naive = (bytes_moved / (t_naive / 1000)) / 1e9
+    bw_triton = (bytes_moved / (t_triton / 1000)) / 1e9
+    bw_pytorch = (bytes_moved / (t_pytorch / 1000)) / 1e9
+    
+    naive_rows.append({
+        "Shape": f"({M}, {N})",
+        "Time (ms)": round(t_naive, 4),
+        "Bandwidth (GB/s)": round(bw_naive, 1),
+    })
+    triton_rows.append({
+        "Shape": f"({M}, {N})",
+        "Time (ms)": round(t_triton, 4),
+        "Bandwidth (GB/s)": round(bw_triton, 1),
+        "Speedup vs Naive": round(t_naive / t_triton, 2),
+        "Speedup vs PyTorch": round(t_pytorch / t_triton, 2),
+    })
+    pytorch_rows.append({
+        "Shape": f"({M}, {N})",
+        "Time (ms)": round(t_pytorch, 4),
+        "Bandwidth (GB/s)": round(bw_pytorch, 1),
+    })
     
     print(f"Shape ({M}, {N}):")
     print(f"  Naive:   {t_naive:.3f} ms")
@@ -49,5 +63,15 @@ for (M, N) in shapes:
     print(f"  PyTorch: {t_pytorch:.3f} ms")
     print(f"  Speedup vs Naive:   {t_naive/t_triton:.2f}x")
     print(f"  Speedup vs PyTorch: {t_pytorch/t_triton:.2f}x")
-    print(f"  Bandwidth: {bandwidth_gb:.1f} GB/s")
     print()
+
+df_naive = pd.DataFrame(naive_rows)
+df_triton = pd.DataFrame(triton_rows)
+df_pytorch = pd.DataFrame(pytorch_rows)
+
+with pd.ExcelWriter("../results/benchmark_results.xlsx", engine="openpyxl") as writer:
+    df_naive.to_excel(writer, sheet_name="Naive Softmax", index=False)
+    df_pytorch.to_excel(writer, sheet_name="PyTorch Softmax", index=False)
+    df_triton.to_excel(writer, sheet_name="Triton Softmax", index=False)
+
+print("Saved to ../results/benchmark_results.xlsx")

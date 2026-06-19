@@ -2,30 +2,32 @@ import torch
 from torch.profiler import profile, ProfilerActivity
 from kernel import softmax
 from naive_softmax import naive_softmax
+import pandas as pd
 
 x = torch.randn(4096, 4096, device="cuda")
 
-with open("../results/profile_output.txt", "w") as f:
+def profile_to_df(func, x):
+    with profile(activities=[ProfilerActivity.CUDA]) as prof:
+        func(x)
     
-    f.write("=== Naive softmax (manual) ===\n")
-    with profile(activities=[ProfilerActivity.CUDA]) as prof:
-        naive_softmax(x)
-    print(prof.key_averages().table(sort_by="cuda_time_total", row_limit=20))
-    f.write(prof.key_averages().table(sort_by="cuda_time_total", row_limit=20))
-    f.write("\n\n")
+    rows = []
+    for evt in prof.key_averages():
+        rows.append({
+            "Name": evt.key,
+            "CPU Total (us)": evt.cpu_time_total,
+            "CUDA Total (us)": evt.cuda_time_total,
+            "# of Calls": evt.count,
+        })
+    return pd.DataFrame(rows).sort_values("CUDA Total (us)", ascending=False)
 
-    f.write("=== PyTorch torch.softmax ===\n")
-    with profile(activities=[ProfilerActivity.CUDA]) as prof:
-        torch.softmax(x, dim=-1)
-    print(prof.key_averages().table(sort_by="cuda_time_total", row_limit=20))
-    f.write(prof.key_averages().table(sort_by="cuda_time_total", row_limit=20))
-    f.write("\n\n")
 
-    f.write("=== Our Triton fused softmax ===\n")
-    with profile(activities=[ProfilerActivity.CUDA]) as prof:
-        softmax(x)
-    print(prof.key_averages().table(sort_by="cuda_time_total", row_limit=20))
-    f.write(prof.key_averages().table(sort_by="cuda_time_total", row_limit=20))
-    f.write("\n")
+df_naive = profile_to_df(naive_softmax, x)
+df_pytorch = profile_to_df(lambda x: torch.softmax(x, dim=-1), x)
+df_triton = profile_to_df(softmax, x)
 
-print("Profile output saved to ../results/profile_output.txt")
+with pd.ExcelWriter("../results/profile_output.xlsx", engine="openpyxl") as writer:
+    df_naive.to_excel(writer, sheet_name="Naive Softmax", index=False)
+    df_pytorch.to_excel(writer, sheet_name="PyTorch Softmax", index=False)
+    df_triton.to_excel(writer, sheet_name="Triton Softmax", index=False)
+
+print("Saved to ../results/profile_output.xlsx")

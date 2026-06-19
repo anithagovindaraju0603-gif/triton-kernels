@@ -3,9 +3,9 @@ import triton
 from kernel import softmax
 import matplotlib.pyplot as plt
 
-def benchmark(func, x, n_runs=100):
+def benchmark(func, x, n_runs=1000): 
     # warmup
-    for _ in range(10):
+    for _ in range(50):  # warm up
         func(x)
     
     start = torch.cuda.Event(enable_timing=True)
@@ -17,7 +17,7 @@ def benchmark(func, x, n_runs=100):
     end.record()
     
     torch.cuda.synchronize()
-    return start.elapsed_time(end) / n_runs  # ms per call
+    return start.elapsed_time(end) / n_runs
 
 
 shapes = [(1823, 781), (4096, 1024), (4096, 4096), (16384, 8192)]

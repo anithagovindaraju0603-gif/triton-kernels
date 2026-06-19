@@ -37,7 +37,7 @@ for (M, N) in shapes:
     # bandwidth calculation
     # bytes read + bytes written = 2 * M * N * 4 (float32 = 4 bytes)
     bytes_moved = 2 * M * N * 4
-    bandwidth_gb = (bytes_moved / (t_triton * 1e-3)) / 1e9  # GB/s
+    bandwidth_gb = (bytes_moved / (t_triton / 1000)) / 1e9  # GB/s
     
     print(f"Shape ({M}, {N}):")
     print(f"  Triton:  {t_triton:.3f} ms")

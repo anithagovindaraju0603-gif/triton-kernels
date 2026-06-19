@@ -15,7 +15,7 @@ def profile_to_df(func, x):
         rows.append({
             "Name": evt.key,
             "CPU Total (us)": evt.cpu_time_total,
-            "CUDA Total (us)": evt.cuda_time_total,
+            "CUDA Total (us)": evt.device_time_total,
             "# of Calls": evt.count,
         })
     return pd.DataFrame(rows).sort_values("CUDA Total (us)", ascending=False)
